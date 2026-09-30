@@ -386,77 +386,88 @@ def calculate_priority(category, severity):
 @app.route("/api/report", methods=["POST"])
 def submit_report():
 
-    data = request.get_json()
+    try:
 
-    if not data:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid request."
+            }), 400
+
+        problem = data.get("problem", "").strip()
+        language = data.get("language", "").strip()
+        location = data.get("location", "").strip()
+        citizen_email = data.get("citizen_email", "").strip().lower()
+
+        if not problem or not location or not citizen_email:
+            return jsonify({
+                "status": "error",
+                "message": "Problem, location, and citizen login are required."
+            }), 400
+
+        category = classify_issue(problem)
+        severity = analyze_severity(problem)
+        priority_score = calculate_priority(category, severity)
+
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        existing = (
+            supabase
+            .table("citizen_requests")
+            .select("id")
+            .execute()
+        )
+
+        ids = []
+
+        for row in existing.data or []:
+            try:
+                ids.append(int(row["id"]))
+            except:
+                pass
+
+        next_id = str(max(ids, default=0) + 1)
+
+        result = (
+            supabase
+            .table("citizen_requests")
+            .insert({
+                "id": next_id,
+                "problem": problem,
+                "language": language,
+                "location": location,
+                "category": category,
+                "severity": severity,
+                "priority_score": priority_score,
+                "status": "Pending",
+                "created_at": created_at,
+                "citizen_email": citizen_email
+            })
+            .execute()
+        )
+
+        return jsonify({
+            "status": "success",
+            "message": "Civic issue submitted successfully!",
+            "id": next_id,
+            "category": category,
+            "severity": severity,
+            "location": location,
+            "priority_score": priority_score,
+            "supabase_result": result.data
+        }), 201
+
+    except Exception as error:
+
+        print("REPORT ERROR:", repr(error))
+
         return jsonify({
             "status": "error",
-            "message": "Invalid request."
-        }), 400
-
-    problem = data.get("problem", "").strip()
-    language = data.get("language", "").strip()
-    location = data.get("location", "").strip()
-    citizen_email = data.get("citizen_email", "").strip().lower()
-
-    # Validate required fields
-    if not problem or not location or not citizen_email:
-        return jsonify({
-            "status": "error",
-            "message": "Problem, location, and citizen login are required."
-        }), 400
-
-    # AI analysis
-    category = classify_issue(problem)
-    severity = analyze_severity(problem)
-    priority_score = calculate_priority(
-        category,
-        severity
-    )
-
-    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Generate report ID from existing Supabase reports
-    existing = (
-        supabase
-        .table("citizen_requests")
-        .select("id")
-        .execute()
-    )
-
-    ids = []
-
-    for row in existing.data or []:
-        try:
-            ids.append(int(row["id"]))
-        except:
-            pass
-
-    next_id = str(max(ids, default=0) + 1)
-
-    # Save report to Supabase
-    supabase.table("citizen_requests").insert({
-        "id": next_id,
-        "problem": problem,
-        "language": language,
-        "location": location,
-        "category": category,
-        "severity": severity,
-        "priority_score": priority_score,
-        "status": "Pending",
-        "created_at": created_at,
-        "citizen_email": citizen_email
-    }).execute()
-
-    return jsonify({
-        "status": "success",
-        "message": "Civic issue submitted successfully!",
-        "id": next_id,
-        "category": category,
-        "severity": severity,
-        "location": location,
-        "priority_score": priority_score
-    }), 201
+            "message": "Report submission failed.",
+            "error": str(error)
+        }), 500
 
 # ==============================
 # GET CIVIC REPORTS API
