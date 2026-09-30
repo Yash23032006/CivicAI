@@ -384,18 +384,21 @@ def calculate_priority(category, severity):
 # ==============================
 
 @app.route("/api/report", methods=["POST"])
+@app.route("/api/report", methods=["POST"])
 def submit_report():
 
     try:
 
+        # STEP 1
         data = request.get_json()
 
         if not data:
             return jsonify({
                 "status": "error",
-                "message": "Invalid request."
+                "message": "STEP 1 FAILED: No JSON data received."
             }), 400
 
+        # STEP 2
         problem = data.get("problem", "").strip()
         language = data.get("language", "").strip()
         location = data.get("location", "").strip()
@@ -404,15 +407,18 @@ def submit_report():
         if not problem or not location or not citizen_email:
             return jsonify({
                 "status": "error",
-                "message": "Problem, location, and citizen login are required."
+                "message": "STEP 2 FAILED: Required fields missing."
             }), 400
 
+        # STEP 3
         category = classify_issue(problem)
         severity = analyze_severity(problem)
         priority_score = calculate_priority(category, severity)
 
+        # STEP 4
         created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # STEP 5 - TEST SUPABASE CONNECTION
         existing = (
             supabase
             .table("citizen_requests")
@@ -420,6 +426,7 @@ def submit_report():
             .execute()
         )
 
+        # STEP 6
         ids = []
 
         for row in existing.data or []:
@@ -430,6 +437,7 @@ def submit_report():
 
         next_id = str(max(ids, default=0) + 1)
 
+        # STEP 7 - INSERT
         result = (
             supabase
             .table("citizen_requests")
@@ -448,6 +456,7 @@ def submit_report():
             .execute()
         )
 
+        # STEP 8
         return jsonify({
             "status": "success",
             "message": "Civic issue submitted successfully!",
@@ -455,8 +464,7 @@ def submit_report():
             "category": category,
             "severity": severity,
             "location": location,
-            "priority_score": priority_score,
-            "supabase_result": result.data
+            "priority_score": priority_score
         }), 201
 
     except Exception as error:
@@ -465,10 +473,9 @@ def submit_report():
 
         return jsonify({
             "status": "error",
-            "message": "Report submission failed.",
-            "error": str(error)
+            "message": "REPORT ERROR: " + str(error)
         }), 500
-
+    
 # ==============================
 # GET CIVIC REPORTS API
 # ==============================

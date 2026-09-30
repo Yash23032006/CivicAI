@@ -116,10 +116,7 @@ if (!response.ok) {
 
     console.error("Report submission error:", error);
 
-    alert(
-        "Report submission failed:\n\n" +
-        error.message
-    );
+    alert(error.message);
 
 }
 
