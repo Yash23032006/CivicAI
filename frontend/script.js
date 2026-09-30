@@ -62,19 +62,34 @@ if (!citizenEmail) {
         });
 
 
-        const result = await response.json();
+        const responseText = await response.text();
+
+let result;
+
+try {
+    result = JSON.parse(responseText);
+} catch (parseError) {
+    console.error("Invalid JSON response:", responseText);
+
+    alert(
+        "CivicAI server returned an unexpected response.\n\n" +
+        "HTTP Status: " + response.status + "\n\n" +
+        responseText.substring(0, 500)
+    );
+
+    return;
+}
 
 
-        if (!response.ok) {
+if (!response.ok) {
 
-            alert(
-                "Failed to submit civic issue.\n\n" +
-                result.message
-            );
+    alert(
+        "Failed to submit civic issue.\n\n" +
+        (result.message || "Unknown server error")
+    );
 
-            return;
-        }
-
+    return;
+}
 
         // SUCCESS
         alert(
@@ -99,13 +114,13 @@ if (!citizenEmail) {
 
     } catch (error) {
 
-        console.error("Submission error:", error);
+    console.error("Submission error:", error);
 
-        alert(
-            "Unable to connect to CivicAI backend.\n\n" +
-            "Please make sure backend.py is running."
-        );
+    alert(
+        "Error while submitting the civic issue.\n\n" +
+        error.message
+    );
 
-    }
+}
 
 });
