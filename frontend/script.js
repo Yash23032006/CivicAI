@@ -114,10 +114,10 @@ if (!response.ok) {
 
     } catch (error) {
 
-    console.error("Submission error:", error);
+    console.error("Report submission error:", error);
 
     alert(
-        "Error while submitting the civic issue.\n\n" +
+        "Report submission failed:\n\n" +
         error.message
     );
 
