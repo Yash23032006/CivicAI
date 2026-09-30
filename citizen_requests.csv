@@ -1,0 +1,19 @@
+id,problem,language,location,category,severity,priority_score,status,created_at,citizen_email
+1,Poor roads make ambulance travel difficult,English,Pune,Roads,High
+2,Village has shortage of clean drinking water,Hindi,Nashik,Water,High
+3,Government school needs better internet connectivity,Marathi,Satara,Education,Medium
+4,Frequent electricity cuts in the village,English,Kolhapur,Electricity,Medium
+5,No proper public transport available,Marathi,Solapur,Public Transport,High
+6,"no proper hospital facility",English,pune,Healthcare,High
+7,Roads are damaged,English,Wagholi,Roads,Low
+8,street light problem,English,koregaon,Roads,Medium
+9,dirt near river bed.,English,Vadhu,Sanitation,Low
+10,Water shortage since 2 days.,English,Nashik,Water & Sanitation,Medium
+11,There is a large pothole on the main road,English,Jalna,Road & Transport,Medium
+12,There is a dangerous pothole causing accidents near the school road.,English,Pune,Road & Transport,High,95
+13,There is a dangerous pothole causing accidents near the school road.,English,Pune,Road & Transport,High,95
+14,Electricity loss since 1 week,English,Lohgaon,Electricity,Low,38
+15,Food served at government school is not good for health.,English,Kokan,Healthcare,Low,40,Pending,2026-09-29 09:46:08,yashvadak23@gmail.com
+16,School buildings are not good.,English,Sangamner,Education,Low,33,Pending,2026-09-29 10:46:04,yashvadak23@gmail.com
+17,our village having poor roads,English,Sangamner,Road & Transport,Low,35,Pending,2026-09-29 13:27:23,rutujasalunke373@gmail.com
+18,Garbage at river bed.,English,Koregaon Bhima,Waste Management,Medium,64,Pending,2026-09-30 09:16:38,yashvadak23@gmail.com

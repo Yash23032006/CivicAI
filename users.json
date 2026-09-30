@@ -1,0 +1,14 @@
+[
+    {
+        "name": "Salunke Rutuja Santosh",
+        "email": "rutujasalunke373@gmail.com",
+        "mobile": "9730302373",
+        "password": "scrypt:32768:8:1$qusXrkAVTse7tK36$6d98d5c632d67349b2ab20ff2e8b920c9fe2eb44708b4eea03917e9bde5c78ee67818f486df9ad713f9de7d65bc14fea23437fe564c999d28c0d5657a30b5f24"
+    },
+    {
+        "name": "Yash Vadak",
+        "email": "yashvadak23@gmail.com",
+        "mobile": "7058111748",
+        "password": "scrypt:32768:8:1$HD61Yjf7NGvKcNwl$246920a2762d2df30ef5628ac9280539010c6b0c15fdbd8981496137ab6cf1645f33b8a30d3efb7cd47c8873d89560b9a6a5c6ce71019beba02a9f0689cefc43"
+    }
+]
