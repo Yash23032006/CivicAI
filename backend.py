@@ -5,9 +5,31 @@ import json
 import os
 import csv
 from datetime import datetime
+from supabase import create_client
 
 app = Flask(__name__)
 CORS(app)
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SECRET_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise RuntimeError("Supabase environment variables are missing.")
+
+supabase = create_client(
+    SUPABASE_URL,
+    SUPABASE_KEY
+)
+
+def get_supabase_reports():
+
+    response = (
+        supabase
+        .table("citizen_requests")
+        .select("*")
+        .execute()
+    )
+
+    return response.data or []
 
 # ==============================
 # PATHS
@@ -375,91 +397,66 @@ def submit_report():
     problem = data.get("problem", "").strip()
     language = data.get("language", "").strip()
     location = data.get("location", "").strip()
-    citizen_email = data.get("citizen_email", "").strip()
+    citizen_email = data.get("citizen_email", "").strip().lower()
 
-# Validate required fields
+    # Validate required fields
     if not problem or not location or not citizen_email:
         return jsonify({
-        "status": "error",
-        "message": "Problem, location, and citizen login are required."
-    }), 400
+            "status": "error",
+            "message": "Problem, location, and citizen login are required."
+        }), 400
 
-# AI analysis
+    # AI analysis
     category = classify_issue(problem)
     severity = analyze_severity(problem)
     priority_score = calculate_priority(
         category,
         severity
-)
+    )
 
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    
+    # Generate report ID from existing Supabase reports
+    existing = (
+        supabase
+        .table("citizen_requests")
+        .select("id")
+        .execute()
+    )
 
-    # Generate next ID
-    rows = []
+    ids = []
 
-    if os.path.exists(REQUESTS_FILE):
+    for row in existing.data or []:
+        try:
+            ids.append(int(row["id"]))
+        except:
+            pass
 
-        with open(
-            REQUESTS_FILE,
-            "r",
-            newline="",
-            encoding="utf-8"
-        ) as file:
+    next_id = str(max(ids, default=0) + 1)
 
-            rows = list(csv.DictReader(file))
-
-    next_id = get_next_report_id(rows)
-
-    # Create CSV file with header if it doesn't exist
-    file_exists = os.path.exists(REQUESTS_FILE)
-
-    with open(
-        REQUESTS_FILE,
-        "a",
-        newline="",
-        encoding="utf-8"
-    ) as file:
-
-        writer = csv.writer(file)
-
-        if not file_exists:
-            writer.writerow([
-        "id",
-        "problem",
-        "language",
-        "location",
-        "category",
-        "severity",
-        "priority_score",
-        "status",
-        "created_at",
-        "citizen_email"
-    ])
-
-        writer.writerow([
-    next_id,
-    problem,
-    language,
-    location,
-    category,
-    severity,
-    priority_score,
-    "Pending",
-    created_at,
-    citizen_email
-])
+    # Save report to Supabase
+    supabase.table("citizen_requests").insert({
+        "id": next_id,
+        "problem": problem,
+        "language": language,
+        "location": location,
+        "category": category,
+        "severity": severity,
+        "priority_score": priority_score,
+        "status": "Pending",
+        "created_at": created_at,
+        "citizen_email": citizen_email
+    }).execute()
 
     return jsonify({
-    "status": "success",
-    "message": "Civic issue submitted successfully!",
-    "id": next_id,
-    "category": category,
-    "severity": severity,
-    "location": location,
-    "priority_score": priority_score
-}), 201
+        "status": "success",
+        "message": "Civic issue submitted successfully!",
+        "id": next_id,
+        "category": category,
+        "severity": severity,
+        "location": location,
+        "priority_score": priority_score
+    }), 201
 
 # ==============================
 # GET CIVIC REPORTS API
@@ -468,69 +465,60 @@ def submit_report():
 @app.route("/api/reports", methods=["GET"])
 def get_reports():
 
-    reports = []
+    try:
 
-    if os.path.exists(REQUESTS_FILE):
+        reports = get_supabase_reports()
 
-        with open(
-            REQUESTS_FILE,
-            "r",
-            newline="",
-            encoding="utf-8"
-        ) as file:
+        total_reports = len(reports)
 
-            reader = csv.DictReader(file)
+        pending = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "pending"
+        )
 
-            for row in reader:
+        resolved = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "resolved"
+        )
 
-                reports.append({
-                    "id": row.get("id", ""),
-                    "problem": row.get("problem", ""),
-                    "language": row.get("language", ""),
-                    "location": row.get("location", ""),
-                    "category": row.get("category", ""),
-                    "severity": row.get("severity", "Low"),
-                    "priority_score": row.get("priority_score", "0"),
-                    "status": row.get("status") or "Pending",
-                    "created_at": row.get("created_at", "")
-                })
+        in_progress = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "in progress"
+        )
 
-    total_reports = len(reports)
+        high_priority = sum(
+            1
+            for report in reports
+            if int(report.get("priority_score") or 0) >= 80
+        )
 
-    pending = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "pending"
-)
+        reports = sorted(
+            reports,
+            key=lambda x: int(x.get("id") or 0),
+            reverse=True
+        )
 
-    resolved = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "resolved"
-)
+        return jsonify({
+            "status": "success",
+            "total_reports": total_reports,
+            "pending": pending,
+            "in_progress": in_progress,
+            "resolved": resolved,
+            "high_priority": high_priority,
+            "reports": reports[:5]
+        }), 200
 
-    in_progress = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "in progress"
-)
+    except Exception as error:
 
-    high_priority = sum(
-    1
-    for report in reports
-    if int(report["priority_score"] or 0) >= 80
-    )
+        print("Supabase reports error:", error)
 
-    return jsonify({
-    "status": "success",
-    "total_reports": total_reports,
-    "pending": pending,
-    "in_progress": in_progress,
-    "resolved": resolved,
-    "high_priority": high_priority,
-    "reports": reports[-5:][::-1]
-}), 200
-
+        return jsonify({
+            "status": "error",
+            "message": "Unable to load civic reports."
+        }), 500
 # ==============================
 # GET MY REPORTS
 # ==============================
@@ -549,51 +537,39 @@ def get_my_reports():
             "message": "Citizen email is required."
         }), 400
 
-    reports = []
+    try:
 
-    if os.path.exists(REQUESTS_FILE):
+        response = (
+            supabase
+            .table("citizen_requests")
+            .select("*")
+            .eq("citizen_email", citizen_email)
+            .execute()
+        )
 
-        with open(
-            REQUESTS_FILE,
-            "r",
-            newline="",
-            encoding="utf-8"
-        ) as file:
+        reports = response.data or []
 
-            reader = csv.DictReader(file)
+        reports = sorted(
+            reports,
+            key=lambda x: int(x.get("id") or 0),
+            reverse=True
+        )
 
-            for row in reader:
+        return jsonify({
+            "status": "success",
+            "citizen_email": citizen_email,
+            "total_reports": len(reports),
+            "reports": reports
+        }), 200
 
-                row_email = (
-                    row.get("citizen_email") or ""
-                ).strip().lower()
+    except Exception as error:
 
-                if row_email == citizen_email:
+        print("Supabase my-reports error:", error)
 
-                    reports.append({
-                        "id": row.get("id", ""),
-                        "problem": row.get("problem", ""),
-                        "language": row.get("language", ""),
-                        "location": row.get("location", ""),
-                        "category": row.get("category", ""),
-                        "severity": row.get("severity") or "Low",
-                        "priority_score": row.get(
-                            "priority_score"
-                        ) or "0",
-                        "status": row.get(
-                            "status"
-                        ) or "Pending",
-                        "created_at": row.get(
-                            "created_at"
-                        ) or ""
-                    })
-
-    return jsonify({
-        "status": "success",
-        "citizen_email": citizen_email,
-        "total_reports": len(reports),
-        "reports": reports[::-1]
-    }), 200
+        return jsonify({
+            "status": "error",
+            "message": "Unable to load your reports."
+        }), 500
 
 
 
@@ -613,114 +589,97 @@ def get_reports_by_city():
             "message": "City name is required."
         }), 400
 
-    reports = []
+    try:
 
-    if os.path.exists(REQUESTS_FILE):
-
-        with open(
-            REQUESTS_FILE,
-            "r",
-            newline="",
-            encoding="utf-8"
-        ) as file:
-
-            reader = csv.DictReader(file)
-
-            for row in reader:
-
-                location = row.get("location", "").strip()
-
-                # Case-insensitive city matching
-                if location.lower() == city.lower():
-
-                    reports.append({
-                        "id": row.get("id", ""),
-                        "problem": row.get("problem", ""),
-                        "language": row.get("language", ""),
-                        "location": location,
-                        "category": row.get("category", ""),
-                        "severity": row.get("severity", "Low"),
-                        "priority_score": row.get("priority_score", "0"),
-                        "status": row.get("status") or "Pending"
-                    })
-
-
-    # ==============================
-    # CITY INTELLIGENCE
-    # ==============================
-
-    total_reports = len(reports)
-
-    high_priority = sum(
-    1
-    for report in reports
-    if int(report["priority_score"] or 0) >= 80
-)
-    pending = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "pending"
-)
-
-    resolved = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "resolved"
-)
-
-    in_progress = sum(
-    1
-    for report in reports
-    if (report["status"] or "").lower() == "in progress"
-)
-
-
-    # Find most common civic category
-
-    category_counts = {}
-
-    for report in reports:
-
-        category = report["category"]
-
-        if category:
-            category_counts[category] = \
-                category_counts.get(category, 0) + 1
-
-
-    if category_counts:
-
-        top_category = max(
-            category_counts,
-            key=category_counts.get
+        response = (
+            supabase
+            .table("citizen_requests")
+            .select("*")
+            .execute()
         )
 
-    else:
+        all_reports = response.data or []
 
-        top_category = "No data"
+        reports = [
+            report
+            for report in all_reports
+            if (report.get("location") or "").strip().lower()
+            == city.lower()
+        ]
 
+        total_reports = len(reports)
 
-    return jsonify({
+        high_priority = sum(
+            1
+            for report in reports
+            if int(report.get("priority_score") or 0) >= 80
+        )
 
-        "status": "success",
+        pending = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "pending"
+        )
 
-        "city": city,
+        resolved = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "resolved"
+        )
 
-        "total_reports": total_reports,
+        in_progress = sum(
+            1
+            for report in reports
+            if (report.get("status") or "").lower() == "in progress"
+        )
 
-        "high_priority": high_priority,
+        category_counts = {}
 
-        "pending": pending,
+        for report in reports:
 
-        "in_progress": in_progress,
+            category = report.get("category")
 
-        "resolved": resolved,
+            if category:
+                category_counts[category] = (
+                    category_counts.get(category, 0) + 1
+                )
 
-        "top_category": top_category,
+        if category_counts:
+            top_category = max(
+                category_counts,
+                key=category_counts.get
+            )
+        else:
+            top_category = "No data"
 
-        "reports": reports[::-1]
+        reports = sorted(
+            reports,
+            key=lambda x: int(x.get("id") or 0),
+            reverse=True
+        )
 
-    }), 200
+        return jsonify({
+
+            "status": "success",
+            "city": city,
+            "total_reports": total_reports,
+            "high_priority": high_priority,
+            "pending": pending,
+            "in_progress": in_progress,
+            "resolved": resolved,
+            "top_category": top_category,
+            "reports": reports
+
+        }), 200
+
+    except Exception as error:
+
+        print("Supabase city reports error:", error)
+
+        return jsonify({
+            "status": "error",
+            "message": "Unable to load city reports."
+        }), 500
 
 # ==============================
 # TRACK CIVIC REQUEST
@@ -729,72 +688,35 @@ def get_reports_by_city():
 @app.route("/api/report/<report_id>", methods=["GET"])
 def track_report(report_id):
 
-    if not os.path.exists(REQUESTS_FILE):
+    try:
+
+        response = (
+            supabase
+            .table("citizen_requests")
+            .select("*")
+            .eq("id", str(report_id))
+            .execute()
+        )
+
+        reports = response.data or []
+
+        if not reports:
+
+            return jsonify({
+                "status": "error",
+                "message": "Report ID not found."
+            }), 404
+
+        return jsonify({
+            "status": "success",
+            "report": reports[0]
+        }), 200
+
+    except Exception as error:
+
+        print("Supabase track report error:", error)
+
         return jsonify({
             "status": "error",
-            "message": "No civic reports found."
-        }), 404
-
-    with open(
-        REQUESTS_FILE,
-        "r",
-        newline="",
-        encoding="utf-8"
-    ) as file:
-
-        reader = csv.DictReader(file)
-
-        for row in reader:
-
-            if row.get("id", "") == str(report_id):
-
-                return jsonify({
-                    "status": "success",
-                    "report": {
-                        "id": row.get("id", ""),
-                        "problem": row.get("problem", ""),
-                        "language": row.get("language", ""),
-                        "location": row.get("location", ""),
-                        "category": row.get("category", ""),
-                        "severity": row.get("severity", "Low"),
-                        "priority_score": row.get(
-                            "priority_score",
-                            "0"
-                        ),
-                        "status": row.get(
-                            "status",
-                            "Pending"
-                        ),
-                        "created_at": row.get(
-                            "created_at",
-                            ""
-                            )
-                                                
-                        }
-                }), 200
-
-    return jsonify({
-        "status": "error",
-        "message": "Report ID not found."
-    }), 404
-
-# ==============================
-# RUN SERVER
-# ==============================
-
-if __name__ == "__main__":
-
-    print("=" * 50)
-    print("CivicAI Server Started")
-    print("=" * 50)
-    print("Frontend : http://127.0.0.1:5000")
-    print("Signup   : http://127.0.0.1:5000/signup.html")
-    print("Login    : http://127.0.0.1:5000/login.html")
-    print("Dashboard: http://127.0.0.1:5000/dashboard.html")
-    print("=" * 50)
-
-    app.run(
-        host="127.0.0.1",
-        port=5000,
-        debug= False
-    )
+            "message": "Unable to track report."
+        }), 500
