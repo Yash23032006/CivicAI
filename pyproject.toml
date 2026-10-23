@@ -7,7 +7,8 @@ dependencies = [
     "Flask",
     "Flask-Cors",
     "Werkzeug",
-    "supabase"
+    "supabase",
+    "python-dotenv"
 ]
 
 [tool.vercel]
